@@ -1,0 +1,320 @@
+---
+title: 'Case Study 2: How Can a Wellness Technology Company Play It Smart?'
+author: "Thuan Ha"
+date: "2024-01-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction:
+This is a case study from the Google Data Analytics Course on Coursera, where I
+will be using what I have learn throughout the course to perform a real-world 
+tasks of a junior data analyst. 
+
+# Scenario:
+You are a junior data analyst working on the marketing analyst team at 
+Bellabeat, a high-tech manufacturer of health-focused products for women. 
+Bellabeat is a successful small company, but they have the potential to become 
+a larger player in the global smart device market. Urška Sršen, co-founder and 
+Chief Creative Officer of Bellabeat, believes that analyzing smart device 
+fitness data could help unlock new growth opportunities for the company. You 
+have been asked to focus on one of Bellabeat’s products and analyze smart 
+device data to gain insight into how consumers are using their smart devices. 
+The insights you discover will then help guide marketing strategy for the 
+company.
+
+# Dataset:
+The dataset provide is FitBit Fitness Tracker Data from Kaggle. This Kaggle data 
+set contains personal fitness tracker from thirty fitbit users. Thirty eligible 
+Fitbit users consented to the submission of personal tracker data, including 
+minute-level output for physical activity, heart rate, and sleep monitoring. It 
+includes information about daily activity, steps, and heart rate that can be 
+used to explore users’ habits.
+
+# Bussiness Tasks:
+1. What are some trends in smart device usage?/
+2. How could these trends apply to Bellabeat customers?/
+3. How could these trends help influence Bellabeat marketing strategy?/
+
+## Packages use for this study:
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(skimr)
+library(dbplyr)
+library(stringr)
+```
+
+## Importing the data:
+
+```{r}
+daily_activity <- read.csv("Bellabeat Data/dailyActivity_merged.csv")
+daily_sleep <- read.csv("Bellabeat Data/sleepDay_merged.csv")
+weight_log_info <- read.csv("Bellabeat Data/weightLogInfo_merged.csv")
+hourly_intensities <- read.csv("Bellabeat Data/hourlyIntensities_merged.csv")
+```
+
+### Checking the data:
+Using the head function let me have a quick overview of the data to make sure 
+each columns have the correct format. It look like the date columns for the 
+four dataset is in character format instead of date format, and IsManualReport 
+for the weight_log_info dataset could be change to a Boolean format.
+
+```{r}
+head(daily_activity)
+head(daily_sleep)
+head(weight_log_info)
+head(hourly_intensities)
+```
+
+## Cleaning columns:
+I'll be using the clean_names() function to have a consistent columns name for
+the dataset I'll be using and to remove space, letter cases, etc. to a 
+consistent format. Also, I'll be changing the date format and adding new columns
+that could help with my analysis.
+
+```{r}
+daily_activity <- clean_names(daily_activity)
+daily_sleep <- clean_names(daily_sleep)
+weight_log_info <- clean_names(weight_log_info)
+hourly_intensities <- clean_names(hourly_intensities)
+```
+
+```{r}
+n_distinct(weight_log_info$id)
+```
+
+After looking over the data I decide to check the weight_log_info dataset since 
+it contain many null value in one of the columns. It seem there are only 8 
+participant willing to give their weight info which is hard to have a analysis 
+for the weight dataset.
+
+
+```{r}
+#as.Date function let me convert chr column into date
+daily_activity$activity_date <- as.Date(daily_activity$activity_date, "%m/%d/%y")
+```
+
+```{r}
+daily_sleep$sleep_day <- as.Date(daily_sleep$sleep_day, "%m/%d/%y")
+```
+
+```{r}
+hourly_intensities$activity_hour <- parse_date_time(hourly_intensities$activity_hour,
+                                               "%m/%d/%y %H:%M:%S %p")
+```
+
+
+```{r}
+#for this dataset I use parse_date_time instead since it can handle the AM/PM in the date
+weight_log_info$date <- parse_date_time(weight_log_info$date, "%m/%d/%y %H:%M:%S %p")
+```
+
+```{r}
+#the is_manual_report contain True or False so I change it into a Boolean
+weight_log_info$is_manual_report <- as.logical(weight_log_info$is_manual_report)
+```
+
+
+
+### Adding new columns:
+Adding a total active hours and days of week columns to help further analyze 
+trend such as which day are participants most active.
+
+```{r}
+daily_activity <- daily_activity %>%
+  mutate(total_active_hours = round((very_active_minutes + fairly_active_minutes + lightly_active_minutes)/60),
+         days_of_week = wday(activity_date, label = T))
+```
+
+```{r}
+hourly_intensities$Time <- format(as.POSIXct(hourly_intensities$activity_hour,format="%Y:%m:%d %H:%M:%S"),"%H:%M:%S")
+
+hourly_intensities$Date <- format(as.POSIXct(hourly_intensities$activity_hour,format="%Y:%m:%d %H:%M:%S"),"%Y:%m:%d")
+```
+
+
+```{r}
+daily_activity_cleaned <- daily_activity[!(daily_activity$total_active_hours <= 0.00),]
+```
+
+
+### Dataset summary:
+
+```{r}
+# daily activiy summary
+daily_activity %>%
+  select(total_steps, 
+         total_distance, 
+         total_active_hours) %>%
+  summary()
+
+# summary of active by minutes
+daily_activity %>%
+  select(very_active_minutes, 
+         fairly_active_minutes, 
+         lightly_active_minutes) %>%
+  summary()
+
+# calories and minutes spend sitting
+daily_activity %>%
+  select(sedentary_minutes, 
+         calories) %>%
+  summary()
+
+# time spend sleeping
+daily_sleep %>%
+  select(total_minutes_asleep, 
+         total_time_in_bed) %>%
+  summary()
+```
+
+### Info. from the summary:
+
+* The most stand out observation would be the average sedentary time or time 
+spend sitting is 991 minutes or around 16-17 hours, which is consider a high
+risk according to this article.[linked phrase](https://www.medicalnewstoday.com/articles/sitting-down-all-day#how-long-is-too-long)/
+
+* The average total steps is 7,638 which is under the recommended average of
+10,000 steps by the CDC.[linked phrase](https://www.medicalnewstoday.com/articles/how-many-steps-should-you-take-a-day#:~:text=As%20a%20result%2C%20the%20CDC,to%20about%201.5%E2%80%932%20miles.)/
+
+* While the average active hours is around the estimated of 4 hours, majority 
+came from lightly active. It is recommended that adults aged between 18 - 64 
+years should do at least 150–300 minutes of moderate-intensity physical 
+activity.[linked phrase](https://www.who.int/news-room/fact-sheets/detail/physical-activity)/
+
+## Visualization:
+
+```{r}
+daily_activity %>%
+  group_by(days_of_week) %>%
+  summarise(average_total_active_hours = mean(total_active_hours)) %>%
+  ggplot(aes(x = days_of_week, y = average_total_active_hours)) +
+  geom_col(fill = "blue") +
+  labs(title = "Average active hours per day")
+```
+
+```{r}
+daily_activity %>%
+  group_by(days_of_week) %>%
+  ggplot(aes(x = days_of_week, y = total_steps)) +
+  geom_col(fill = "blue") +
+  labs(title = "Total steps per day")
+```
+
+```{r}
+daily_activity %>%
+  group_by(days_of_week) %>%
+  ggplot(aes(x = days_of_week, y = total_active_hours)) +
+  geom_col(fill = "blue") +
+  labs(title = "Total active hours per day")
+```
+
+```{r}
+daily_activity %>%
+  group_by(days_of_week) %>%
+  ggplot(aes(x = days_of_week, y = calories)) +
+  geom_col(fill = "blue") +
+  labs(title = "Total calories burned per day")
+```
+
+
+
+```{r}
+avg_int_by_hour <- hourly_intensities %>%
+  group_by(Time) %>%
+  drop_na() %>%
+  summarise(average_total_intensity = mean(total_intensity))
+
+ggplot(avg_int_by_hour, aes(x = Time, y = average_total_intensity)) +
+  geom_histogram(stat = "identity", fill = "dark blue") +
+  theme(axis.text.x = element_text(angle = 270)) +
+  labs(title = "Time when there are most intensisies")
+```
+
+
+```{r}
+aggregate(daily_activity$total_active_hours, list(daily_activity$days_of_week), FUN = sum)
+```
+
+
+```{r}
+daily_activity %>%
+  group_by(days_of_week) %>%
+  summarise(average_sedentary_minutes = mean(sedentary_minutes)) %>%
+  ggplot(aes(x = days_of_week, y = average_sedentary_minutes)) +
+  geom_col(fill = "blue") +
+  labs(title = "Average time spent sitting per days")
+```
+### Correlations:
+
+```{r}
+cor(daily_activity$total_steps, daily_activity$calories)
+```
+
+```{r}
+cor(daily_activity$total_active_hours, daily_activity$calories)
+```
+
+```{r}
+cor(daily_activity$very_active_minutes, daily_activity$calories)
+```
+
+
+```{r}
+cor(daily_activity$sedentary_minutes, daily_activity$calories)
+```
+
+
+```{r}
+ggplot(daily_activity, aes(x = total_steps, y = calories)) + geom_smooth() + geom_point(color = "maroon")
+```
+
+```{r}
+ggplot(daily_activity, aes(x = total_active_hours, y = calories)) + geom_jitter(color = "maroon") + geom_smooth() + labs(title = "Correlations between calories burned and active hours")
+```
+
+```{r}
+ggplot(daily_activity, aes(x = very_active_minutes, y = calories)) + geom_jitter(color = "maroon") + geom_smooth() + labs(title = "Very active minutes vs. calories burn")
+```
+
+```{r}
+ggplot(daily_activity, aes(x = lightly_active_minutes, y = calories)) + geom_jitter(color = "maroon") + geom_smooth() + labs(title = "Light active minutes vs. calories burn ")
+```
+
+
+```{r}
+ggplot(daily_activity, aes(x = sedentary_minutes, y = calories)) + geom_jitter(color = "maroon") + geom_smooth() + labs(title = "Correlations between calories burned and sedentary")
+```
+
+## Summary
+After analyzing the plot, it seem that there are a drop off in active hour after
+sunday, while the average active hours are around 3-4 hours a day from the first
+plot we know that it mostly consist of lightly active from a quick summary that
+we did before it./
+
+Also, there are a strong correlation between total steps and calories burn from 
+the correlation test and the plot. There are correlation between active hours 
+and calories burn, however there are only moderate since the correlation 
+coefficient is only 0.46. The relationship between active and calories burn does
+get better as we look at the correlation test and plot between very active and
+lightly active./
+
+### Recommendation and ideas
+1. Bellabeat could have recommend workout routine through the app that let user 
+know what workout they do for each day. From a personal experience, when I first
+start workout it very demotivating since I have no idea what to do, which in
+turn cause me to be lazy and not go to the gym, but after having a workout 
+routine it give me no excuse since I have a set workout ready for me./
+
+2. Having a notification of calories burn after a workout also motivate an
+individual since it show a goal that they have achieve./
+
+3. The average sedentary is very concerning, what Bellabeat could do is have
+notification through there app that let user know when the sedentary time is 
+high and recommend to do a light walk or stand up to stretch./
